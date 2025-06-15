@@ -1,0 +1,29 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# OS / system files
+*.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python virtualenv
+venv/
+.env/
+
+# Android Studio & Flutter
+.android/
+.gradle/
+.idea/
+build/
+*.iml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# Zip or media
+*.zip
+*.mp4
