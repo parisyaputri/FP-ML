@@ -2,97 +2,105 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
-# Load file CSV
-df = pd.read_csv('data.csv', encoding='latin1')
+# === Load Dataset ===
+data = pd.read_csv('data.csv', encoding='latin1')
 
-# === Pre-processing ===
+# === Feature Engineering ===
+data['TotalSpent'] = data['Quantity'] * data['UnitPrice']
+grouped_data = data.groupby('CustomerID')['TotalSpent'].sum().reset_index()
 
-# Count the total spent each cust
-df['TotalSpent'] = df['Quantity'] * df['UnitPrice']
-customer_spending = df.groupby('CustomerID')['TotalSpent'].sum().reset_index()
-
-# Categorize
-low_spender_threshold = 3000
-high_spender_threshold = 15000
-
-def categorize_spending(total):
-    if total < low_spender_threshold:
+# === Labeling ===
+def assign_category(amount):
+    if amount < 3000:
         return 'Low Spender'
-    elif total < high_spender_threshold:
+    elif amount < 15000:
         return 'Medium Spender'
-    else:
-        return 'High Spender'
+    return 'High Spender'
 
-customer_spending['SpendingCategory'] = customer_spending['TotalSpent'].apply(categorize_spending)
+grouped_data['SpendingCategory'] = grouped_data['TotalSpent'].apply(assign_category)
 
-# === Model Preparation ===
-X = customer_spending[['TotalSpent']]
-y = customer_spending['SpendingCategory']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# === Prepare Dataset ===
+features = grouped_data[['TotalSpent']]
+labels = grouped_data['SpendingCategory']
+X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
 
-# === Model Training & Evaluation ===
-results = {}
+# === Store Result Metrics ===
+evaluation = {}
 
-# 1. Decision Tree Biasa
-dt_base = DecisionTreeClassifier(criterion='entropy', random_state=42)
-dt_base.fit(X_train, y_train)
-y_pred_base = dt_base.predict(X_test)
-results['Base Decision Tree (No Scaling)'] = {
-    'Accuracy': accuracy_score(y_test, y_pred_base),
-    'Precision (macro)': precision_score(y_test, y_pred_base, average='macro'),
-    'Recall (macro)': recall_score(y_test, y_pred_base, average='macro'),
-    'F1 Score (macro)': f1_score(y_test, y_pred_base, average='macro'),
+# === 1. Base Decision Tree ===
+clf_base = DecisionTreeClassifier(criterion='entropy', random_state=42)
+clf_base.fit(X_train, y_train)
+pred_base = clf_base.predict(X_test)
+
+evaluation['Base DT (Unscaled)'] = {
+    'Accuracy': accuracy_score(y_test, pred_base),
+    'Precision (Macro)': precision_score(y_test, pred_base, average='macro'),
+    'Recall (Macro)': recall_score(y_test, pred_base, average='macro'),
+    'F1 Score (Macro)': f1_score(y_test, pred_base, average='macro')
 }
 
-# 2. Dengan StandardScaler
+# === 2. Scaled Features ===
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-dt_scaled = DecisionTreeClassifier(criterion='entropy', random_state=42)
-dt_scaled.fit(X_train_scaled, y_train)
-y_pred_scaled = dt_scaled.predict(X_test_scaled)
-results['Decision Tree (With Scaling)'] = {
-    'Accuracy': accuracy_score(y_test, y_pred_scaled),
-    'Precision (macro)': precision_score(y_test, y_pred_scaled, average='macro'),
-    'Recall (macro)': recall_score(y_test, y_pred_scaled, average='macro'),
-    'F1 Score (macro)': f1_score(y_test, y_pred_scaled, average='macro'),
+X_train_std = scaler.fit_transform(X_train)
+X_test_std = scaler.transform(X_test)
+
+clf_scaled = DecisionTreeClassifier(criterion='entropy', random_state=42)
+clf_scaled.fit(X_train_std, y_train)
+pred_scaled = clf_scaled.predict(X_test_std)
+
+evaluation['DT with Scaling'] = {
+    'Accuracy': accuracy_score(y_test, pred_scaled),
+    'Precision (Macro)': precision_score(y_test, pred_scaled, average='macro'),
+    'Recall (Macro)': recall_score(y_test, pred_scaled, average='macro'),
+    'F1 Score (Macro)': f1_score(y_test, pred_scaled, average='macro')
 }
 
-# 3. Grid Search
-param_grid = {'max_depth': [None, 10, 20, 30], 'min_samples_split': [2, 5, 10]}
-grid_search = GridSearchCV(DecisionTreeClassifier(criterion='entropy', random_state=42),
-                           param_grid, cv=10, scoring='accuracy')
-grid_search.fit(X_train_scaled, y_train)
-best_tree = grid_search.best_estimator_
-y_pred_best = best_tree.predict(X_test_scaled)
-results['Best Decision Tree (Tuned)'] = {
-    'Accuracy': accuracy_score(y_test, y_pred_best),
-    'Precision (macro)': precision_score(y_test, y_pred_best, average='macro'),
-    'Recall (macro)': recall_score(y_test, y_pred_best, average='macro'),
-    'F1 Score (macro)': f1_score(y_test, y_pred_best, average='macro'),
+# === 3. Grid Search Optimization ===
+param_options = {
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10]
 }
 
-# === Print Summary ===
-print("\nModel Evaluation Summary:")
-print(pd.DataFrame(results).T)
+grid_search = GridSearchCV(
+    estimator=DecisionTreeClassifier(criterion='entropy', random_state=42),
+    param_grid=param_options,
+    cv=10,
+    scoring='accuracy'
+)
 
-# === Visualisasi Tree Terbaik ===
+grid_search.fit(X_train_std, y_train)
+best_clf = grid_search.best_estimator_
+pred_best = best_clf.predict(X_test_std)
+
+evaluation['Optimized DT'] = {
+    'Accuracy': accuracy_score(y_test, pred_best),
+    'Precision (Macro)': precision_score(y_test, pred_best, average='macro'),
+    'Recall (Macro)': recall_score(y_test, pred_best, average='macro'),
+    'F1 Score (Macro)': f1_score(y_test, pred_best, average='macro')
+}
+
+# === Print Results ===
+print("\nEvaluation Results Summary:")
+print(pd.DataFrame(evaluation).T)
+
+# === Visualize Best Decision Tree ===
 plt.figure(figsize=(12, 8))
-plot_tree(best_tree, feature_names=['TotalSpent (scaled)'], class_names=best_tree.classes_, filled=True)
-plt.title('Best Decision Tree for Customer Spending Categories')
+plot_tree(best_clf, feature_names=['TotalSpent (scaled)'], class_names=best_clf.classes_, filled=True)
+plt.title('Optimized Decision Tree Visualization')
 plt.show()
 
 # === Confusion Matrix ===
-conf_matrix = confusion_matrix(y_test, y_pred_best)
+conf_matrix = confusion_matrix(y_test, pred_best)
 plt.figure(figsize=(8, 6))
 sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
-            xticklabels=best_tree.classes_, yticklabels=best_tree.classes_)
+            xticklabels=best_clf.classes_, yticklabels=best_clf.classes_)
 plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.title('Confusion Matrix')
+plt.ylabel('True')
+plt.title('Confusion Matrix - Optimized DT')
 plt.show()
