@@ -2,29 +2,32 @@ import socket
 import pygame
 from game import BattleshipGame
 
-HOST = '0.0.0.0'
-PORT = 5555
+# Server settings
+HOST = '0.0.0.0'   # Listen on all available network interfaces
+PORT = 5555        # Port to listen on
 
 def main():
-    pygame.init()       # Initialize Pygame
-    screen = pygame.display.set_mode((1000, 600))  # Create game window
-    pygame.display.set_caption("Battleship Server")  # Set window title
+    # Initialize Pygame window
+    pygame.init()
+    screen = pygame.display.set_mode((1000, 600))
+    pygame.display.set_caption("Battleship Server")
 
-    # Create TCP socket and bind to specified host and port
+    # Create TCP socket and listen for connection
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((HOST, PORT))
-    s.listen(1)          # Listen for a single connection
+    s.listen(1)  # Allow only 1 client
     print("Waiting for connection...")
 
-    # Accept an incoming client connection
+    # Accept connection from client
     conn, addr = s.accept()
     print("Client connected from", addr)
 
-    # Start the Battleship game (this instance is the host)
+    # Start the Battleship game (server is the host)
     game = BattleshipGame(screen, is_host=True, conn=conn)
-    game.run()           # Run the game loop
-    pygame.quit()        # Quit Pygame on exit
+    game.run()
 
-# Only run main() if this file is executed directly
+    # Clean up on exit
+    pygame.quit()
+
 if __name__ == '__main__':
     main()
